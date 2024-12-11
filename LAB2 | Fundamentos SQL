@@ -1,0 +1,152 @@
+-- Carga estas queries en Snowflake y responde las preguntas:
+
+-- Crear la base de datos (si no existe)
+CREATE OR REPLACE DATABASE EmpresaVentas;
+
+-- Crear el esquema (si no existe)
+USE DATABASE EmpresaVentas;
+CREATE OR REPLACE SCHEMA Public;
+
+-- Seleccionar la base de datos y el esquema
+USE SCHEMA Public;
+
+-- Script para base de datos de Ventas de una Empresa
+
+-- Crear las tablas principales
+CREATE OR REPLACE TABLE Productos (
+    producto_id INT AUTOINCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    categoria VARCHAR(50),
+    precio DECIMAL(10, 2) NOT NULL
+);
+
+CREATE OR REPLACE TABLE Clientes (
+    cliente_id INT AUTOINCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    telefono VARCHAR(15),
+    direccion VARCHAR(200)
+);
+
+CREATE OR REPLACE TABLE Ventas (
+    venta_id INT AUTOINCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    fecha DATE DEFAULT CURRENT_DATE,
+    total DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES Clientes(cliente_id)
+);
+
+CREATE OR REPLACE TABLE Detalle_Ventas (
+    detalle_id INT AUTOINCREMENT PRIMARY KEY,
+    venta_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (venta_id) REFERENCES Ventas(venta_id),
+    FOREIGN KEY (producto_id) REFERENCES Productos(producto_id)
+);
+
+-- Insertar datos en las tablas
+INSERT INTO Productos (nombre, categoria, precio) VALUES
+('Camiseta', 'Ropa', 20.00),
+('Pantalón', 'Ropa', 35.00),
+('Zapatos', 'Calzado', 50.00),
+('Bolso', 'Accesorios', 40.00),
+('Sombrero', 'Accesorios', 15.00);
+
+
+INSERT INTO Clientes (nombre, email, telefono, direccion) VALUES
+('Juan Pérez', 'juan.perez@gmail.com', '1234567890', 'Calle Falsa 123'),
+('María López', 'maria.lopez@gmail.com', '0987654321', 'Av. Principal 456'),
+('Carlos García', 'carlos.garcia@gmail.com', '5678901234', 'Carrera Secundaria 789');
+
+INSERT INTO Ventas (cliente_id, total) VALUES
+(1, 75.00),
+(2, 50.00),
+(3, 100.00);
+
+INSERT INTO Detalle_Ventas (venta_id, producto_id, cantidad, precio_unitario) VALUES
+(1, 1, 2, 20.00),
+(1, 5, 1, 15.00),
+(2, 3, 1, 50.00),
+(3, 2, 2, 35.00),
+(3, 4, 1, 40.00);
+
+-- Verificar que los datos se han insertado correctamente
+SELECT * FROM Productos;
+SELECT * FROM Clientes;
+SELECT * FROM Ventas;
+SELECT * FROM Detalle_Ventas;
+
+
+-- PREGUNTAS:
+
+-- 1.¿Cuántos productos hay registrados en la tabla Productos?
+
+SELECT COUNT(*) AS productos_registrados
+FROM Productos;
+
+-- 2.¿Cuál es el nombre y precio del producto más caro?
+
+SELECT nombre, precio
+FROM Productos
+WHERE precio = (SELECT MAX(precio)
+                FROM Productos);
+
+-- 3.¿Cuántos clientes hay registrados en la tabla Clientes?
+
+SELECT COUNT(*) AS clientes_registrados
+FROM Clientes;
+
+-- 4.¿Cuál es el total de ventas realizado por cada cliente?
+
+SELECT c.nombre AS cliente, v.total AS total_ventas
+FROM Clientes AS c
+JOIN Ventas AS v
+ON c.cliente_id = v.cliente_id;
+
+-- 5.¿Qué productos compró el cliente 'Carlos García'?
+
+SELECT p.nombre AS productos_comprados
+FROM Productos AS p
+JOIN Detalle_Ventas AS dv
+ON p.producto_id = dv.producto_id
+JOIN VENTAS AS v
+ON dv.venta_id = v.venta_id
+JOIN Clientes AS c
+ON v.cliente_id = c.cliente_id
+WHERE c.nombre = 'Carlos García';
+
+
+-- 6.¿Cuál es el total de ingresos generados por todas las ventas?
+
+SELECT SUM(TOTAL) AS total_ventas
+FROM Ventas;
+
+-- 7.¿Cuántas unidades del producto 'Camiseta' se han vendido?
+
+SELECT dv.cantidad AS cantidad_de_camisetas
+FROM Detalle_Ventas AS dv
+JOIN Productos AS p
+ON dv.producto_id = p.producto_id
+WHERE p.nombre = 'Camiseta';
+
+-- 8.¿Cuál es el precio promedio de los productos en la tabla Productos?
+
+SELECT ROUND(AVG(Precio),2) AS pecio_promedio
+FROM Productos;
+
+-- 9.¿Qué cliente realizó la venta más cara y cuál fue su monto?
+
+SELECT c.nombre AS cliente, v.total AS venta
+FROM Clientes AS c
+JOIN Ventas AS v
+ON c.cliente_id = v.cliente_id
+WHERE v.total = (SELECT MAX(v.total)
+                   FROM Ventas AS v);
+
+-- 10.¿Cuántas ventas contienen más de un producto?
+
+SELECT COUNT(venta_id) AS ventas_con_varios_productos
+FROM Detalle_Ventas
+WHERE cantidad > 1;
