@@ -1,4 +1,4 @@
-CREATE DATABASE TikTokDB; -- Creo la base de datos
+CREATE DATABASE TikTokDB; -- Creo la base de datos en Snowflake
 
 USE TikTokDB; -- la selecciono
 
