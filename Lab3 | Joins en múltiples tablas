@@ -1,0 +1,172 @@
+-- Carga estas queries en Snowflake y responde las preguntas:
+
+-- Crear la base de datos y el esquema para la tienda Zara
+CREATE OR REPLACE DATABASE ZaraDB;
+USE DATABASE ZaraDB;
+
+CREATE OR REPLACE SCHEMA Public;
+USE SCHEMA Public;
+
+-- Crear las tablas principales
+CREATE OR REPLACE TABLE Productos (
+    producto_id INT AUTOINCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    categoria VARCHAR(50),
+    precio DECIMAL(10, 2) NOT NULL,
+    stock INT NOT NULL
+);
+
+CREATE OR REPLACE TABLE Clientes (
+    cliente_id INT AUTOINCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    telefono VARCHAR(15),
+    direccion VARCHAR(200)
+);
+
+CREATE OR REPLACE TABLE Ventas (
+    venta_id INT AUTOINCREMENT PRIMARY KEY,
+    cliente_id INT NOT NULL,
+    fecha DATE DEFAULT CURRENT_DATE,
+    total DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (cliente_id) REFERENCES Clientes(cliente_id)
+);
+
+CREATE OR REPLACE TABLE Detalle_Ventas (
+    detalle_id INT AUTOINCREMENT PRIMARY KEY,
+    venta_id INT NOT NULL,
+    producto_id INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (venta_id) REFERENCES Ventas(venta_id),
+    FOREIGN KEY (producto_id) REFERENCES Productos(producto_id)
+);
+
+-- Insertar datos en las tablas
+INSERT INTO Productos (nombre, categoria, precio, stock) VALUES
+('Camiseta Básica', 'Ropa', 19.99, 100),
+('Pantalón Vaquero', 'Ropa', 49.99, 50),
+('Chaqueta de Cuero', 'Ropa', 129.99, 20),
+('Bolso de Mano', 'Accesorios', 59.99, 30),
+('Zapatillas Deportivas', 'Calzado', 79.99, 25);
+
+INSERT INTO Clientes (nombre, email, telefono, direccion) VALUES
+('Ana Torres', 'ana.torres@gmail.com', '111222333', 'Calle Luna 123'),
+('Luis Gómez', 'luis.gomez@gmail.com', '444555666', 'Av. Sol 456'),
+('Marta López', 'marta.lopez@gmail.com', '777888999', 'Plaza Estrella 789');
+
+INSERT INTO Ventas (cliente_id, total) VALUES
+(1, 89.97),
+(2, 129.98),
+(3, 159.97);
+
+INSERT INTO Detalle_Ventas (venta_id, producto_id, cantidad, precio_unitario) VALUES
+(1, 1, 3, 19.99),
+(2, 2, 2, 49.99),
+(3, 3, 1, 129.99),
+(3, 5, 1, 79.99);
+
+-- Verificar que los datos se han insertado correctamente
+SELECT * FROM Productos;
+SELECT * FROM Clientes;
+SELECT * FROM Ventas;
+SELECT * FROM Detalle_Ventas;
+
+
+-- Preguntas 
+
+-- 1. ¿Cuántos productos hay en cada categoría?
+
+SELECT p.categoria, COUNT(p.nombre) AS productos
+FROM Productos AS p
+GROUP BY p.categoria;
+
+-- 2. ¿Qué cliente realizó más compras?
+
+SELECT c.nombre
+FROM Clientes AS c
+JOIN Ventas as v
+ON c.cliente_id = v.cliente_id
+WHERE v.total = (SELECT MAX(v.total) 
+                    FROM Ventas as v);
+
+-- 3. ¿Cuál es el producto más caro?
+
+SELECT p.nombre AS producto, p.precio
+FROM productos AS p
+WHERE p.precio = (SELECT MAX(p.precio)
+                    FROM productos AS p);
+
+-- 4. ¿Qué productos se vendieron en la venta con ID 1?
+
+SELECT p.nombre AS productos_vendidos, dv.cantidad
+FROM productos AS p
+JOIN Detalle_Ventas as dv
+ON p.producto_id = dv.producto_id
+WHERE dv.venta_id = 1;
+
+-- 5. ¿Cuál es el total de ingresos generados?
+
+SELECT SUM(v.total) AS ingreso_total
+FROM Ventas as v;
+
+-- 6. ¿Cuáles son los clientes que han comprado más de un tipo de producto?
+
+SELECT c.nombre AS cliente
+FROM Clientes AS c
+JOIN Ventas AS v
+ON c.cliente_id = v.cliente_id
+JOIN Detalle_Ventas as dv
+ON v.venta_id = dv.venta_id
+GROUP BY c.nombre
+HAVING COUNT(DISTINCT dv.producto_id) > 1;
+
+-- 7. ¿Qué productos tienen menos de 30 unidades en stock y se han vendido?
+
+SELECT p.nombre AS productos_menos_30
+FROM Productos AS p
+JOIN Detalle_Ventas AS dv
+ON p.producto_id = dv.producto_id
+WHERE p.stock < 30 AND dv.cantidad > 0; -- tienen menos de 30u de stock y sus ventas no son 0.
+
+-- 8. ¿Cuál fue el total gastado por cada cliente y qué productos compraron?
+
+SELECT c.nombre AS clientes, SUM(v.total) AS total_gastado, 
+        LISTAGG(p.nombre, ', ') WITHIN GROUP (ORDER BY p.nombre) AS productos 
+FROM clientes AS c
+JOIN ventas as v
+ON c.cliente_id = v.cliente_id
+JOIN detalle_ventas AS dv
+ON v.venta_id = dv.venta_id
+JOIN productos AS p
+ON dv.producto_id = p.producto_id
+GROUP BY c.nombre; -- usé LISTAGG para agrupar los productos en una sola fila
+
+-- 9. ¿Qué productos generan más ingresos totales?
+
+SELECT p.nombre AS productos, 
+FROM productos AS p
+JOIN detalle_ventas AS dv
+ON p.producto_id = dv.producto_id
+JOIN ventas as v
+ON dv.venta_id = v.venta_id
+WHERE v.total = (SELECT MAX(v.total)
+                    FROM ventas as v);
+
+-- 10. ¿Qué cliente realizó la compra más cara y qué productos estaban incluidos?
+
+SELECT c.nombre AS cliente, 
+        LISTAGG(p.nombre, ', ') WITHIN GROUP (ORDER BY p.nombre) AS productos 
+FROM clientes AS c
+JOIN ventas as v
+ON c.cliente_id = v.cliente_id
+JOIN detalle_ventas AS dv
+ON v.venta_id = dv.venta_id
+JOIN productos as p
+ON dv.producto_id = p.producto_id
+WHERE v.total = (SELECT MAX(v.total)
+                    FROM ventas as v)
+GROUP BY c.nombre;
+
+
+
