@@ -1,6 +1,6 @@
--- Primero ejecuto el archivo de SQL 'create_table_bands' para crear las tablas de mi base de datos
+-- Primero ejecuto el archivo de SQL 'create_table_bands' para crear las tablas de mi base de datos en MySQL Workbench.
 -- Después ejecuto el archivo de SQL 'insert_into_bands' para introducir los datos que componen la base de datos.
--- Reviso el Modelo Entidad-Relación (claves primarias, claves externas y tipo de relaciones entre las tablas)
+-- Reviso el Modelo Entidad-Relación (claves primarias, claves externas y tipo de relaciones entre las tablas).
 
 -- Ahora comenzaré a trabajar con mi base de datos:
 
