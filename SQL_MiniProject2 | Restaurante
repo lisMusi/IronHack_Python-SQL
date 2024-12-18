@@ -1,0 +1,209 @@
+CREATE DATABASE Restaurante; -- Creo la base de datos en Snowflake
+USE DATABASE Restaurante;
+
+CREATE TABLE sales (
+customer_id STRING,
+order_date DATE,
+product_id INT );
+
+INSERT INTO sales (customer_id, order_date, product_id) VALUES
+('A', '2021-01-01', 1),
+('A', '2021-01-01', 2),
+('A', '2021-01-07', 2),
+('A', '2021-01-10', 3),
+('A', '2021-01-11', 3),
+('A', '2021-01-11', 3),
+('B', '2021-01-01', 2),
+('B', '2021-01-02', 2),
+('B', '2021-01-04', 1),
+('B', '2021-01-11', 1),
+('B', '2021-01-16', 3),
+('B', '2021-02-01', 3),
+('C', '2021-01-01', 3),
+('C', '2021-01-01', 3),
+('C', '2021-01-07', 3);
+
+CREATE TABLE menu (
+product_id INT,
+product_name STRING,
+price INT );
+
+INSERT INTO menu (product_id, product_name, price) VALUES
+(1, 'sushi', 10),
+(2, 'curry', 15),
+(3, 'ramen', 12);
+
+CREATE TABLE members (
+customer_id STRING,
+join_date DATE );
+
+INSERT INTO members (customer_id, join_date) VALUES
+('A', '2021-01-07'),
+('B', '2021-01-09');
+
+-- Añado PK y FK a las diferentes tablas para relacionarlas:
+
+ALTER TABLE members
+ADD PRIMARY KEY (customer_id);
+
+ALTER TABLE menu
+ADD PRIMARY KEY (product_id);
+
+ALTER TABLE sales
+ADD FOREIGN KEY (customer_id) REFERENCES members(customer_id);
+
+ALTER TABLE sales
+ADD FOREIGN KEY (product_id) REFERENCES menu(product_id);
+
+
+-- PREGUNTAS
+
+-- 1) ¿Cuál es la cantidad total que gastó cada cliente en el restaurante?
+
+SELECT s.customer_id AS cliente, SUM(mn.price) AS cuenta
+FROM sales AS s
+JOIN menu AS mn
+ON s.product_id = mn.product_id
+GROUP BY 1;
+
+-- 2) ¿Cuántos días ha visitado cada cliente el restaurante?
+
+SELECT s.customer_id AS cliente, COUNT(s.order_date) AS dias
+FROM sales AS s
+GROUP BY 1;
+
+-- 3) ¿Cuál fue el primer artículo del menú comprado por cada cliente?
+
+SELECT s.customer_id AS cliente, mn.product_name AS articulo
+FROM sales AS s
+JOIN menu AS mn
+ON s.product_id = mn.product_id
+WHERE s.order_date = (SELECT MIN(s2.order_date)
+                        FROM sales AS s2
+                        WHERE s2.customer_id = s.customer_id)
+ORDER BY 1; 
+
+-- como con la anterior query me sale mas de un resultado por cliente utilizo la funcion ROW_NUMBER()
+
+WITH ranked_sales AS (SELECT s.customer_id,s.product_id, 
+                            ROW_NUMBER() OVER (PARTITION BY s.customer_id ORDER BY s.order_date ASC, s.product_id ASC) AS row_num
+                        FROM sales s)
+SELECT r.customer_id AS cliente, m.product_name AS articulo
+FROM ranked_sales AS r
+JOIN menu AS m 
+ON r.product_id = m.product_id
+WHERE r.row_num = 1
+ORDER BY 1;
+
+-- 4) ¿Cuál es el artículo más comprado en el menú y cuántas veces lo compraron todos los Clientes?
+
+SELECT mn.product_name AS articulo, s.customer_id AS cliente, COUNT(s.product_id) AS veces_comprado
+FROM menu AS mn
+JOIN sales AS s
+ON mn.product_id = s.product_id
+WHERE mn.product_name = (SELECT mn.product_name
+                        FROM menu AS mn
+                        JOIN sales AS s
+                        ON mn.product_id = s.product_id
+                        GROUP BY 1
+                        ORDER BY COUNT(s.product_id) DESC
+                        LIMIT 1)
+GROUP BY 1, 2;
+
+-- 5) ¿Qué artículo fue el más popular para cada cliente?
+
+WITH ranked_products AS (SELECT s.customer_id, mn.product_name, COUNT(s.product_id) AS product_count,
+                                ROW_NUMBER() OVER (PARTITION BY s.customer_id ORDER BY product_count DESC,  
+                                mn.product_name ASC) AS rank_num
+                            FROM sales AS s
+                            JOIN menu AS mn 
+                            ON s.product_id = mn.product_id
+                            GROUP BY 1, 2)
+SELECT customer_id AS cliente, product_name AS producto, product_count AS cantidad
+FROM ranked_products
+WHERE rank_num = 1
+ORDER BY customer_id;
+
+-- 6) ¿Qué artículo compró primero el cliente después de convertirse en miembro?
+
+SELECT s.customer_id AS cliente, mn.product_name AS articulo
+FROM sales AS s
+JOIN menu AS mn 
+ON s.product_id = mn.product_id
+JOIN members AS m 
+ON s.customer_id = m.customer_id
+WHERE s.order_date >= m.join_date
+AND s.order_date = (SELECT MIN(s2.order_date)
+                    FROM sales AS s2
+                    WHERE s2.customer_id = s.customer_id
+                    AND s2.order_date >= m.join_date)
+ORDER BY 1;
+
+
+-- 7) --¿Qué artículo se compró justo antes de que el cliente se convirtiera en miembro?
+
+SELECT s.customer_id AS cliente, LISTAGG(mn.product_name, ',') AS articulo
+FROM sales AS s
+JOIN menu AS mn 
+ON s.product_id = mn.product_id
+JOIN members AS m 
+ON s.customer_id = m.customer_id
+WHERE s.order_date < m.join_date
+AND s.order_date = (SELECT MAX(s2.order_date)
+                    FROM sales AS s2
+                    WHERE s2.customer_id = s.customer_id
+                    AND s2.order_date < m.join_date)
+GROUP BY 1
+ORDER BY 1;
+
+
+-- 8) ¿Cuál es el total de artículos y la cantidad gastada por cada miembro antes de convertirse en miembro?
+
+SELECT s.customer_id AS miembro, COUNT(s.product_id) AS total_articulos, SUM(mn.price) AS cantidad_gastada
+FROM sales AS s
+JOIN menu AS mn 
+ON s.product_id = mn.product_id
+JOIN members AS m 
+ON s.customer_id = m.customer_id
+WHERE s.order_date < m.join_date
+GROUP BY 1
+ORDER BY 1;
+
+
+-- 9) Si cada $1 gastado equivale a 10 puntos y el sushi tiene un multiplicador de puntos 2x,¿cuántos puntos tendría cada cliente?
+-- Suposición: Solo los clientes que son miembros reciben puntos al comprar artículos, los puntos los reciben en las ordenes iguales o posteriores a la fecha en la que se convierten en miembros.
+
+SELECT s.customer_id AS cliente, 
+        SUM(CASE 
+                WHEN mn.product_name = 'sushi' THEN mn.price * 10 * 2
+                ELSE mn.price * 10
+            END) AS total_puntos
+FROM sales AS s
+JOIN menu AS mn 
+ON s.product_id = mn.product_id
+JOIN members AS m 
+ON s.customer_id = m.customer_id
+WHERE s.order_date >= m.join_date
+GROUP BY 1
+ORDER BY 1;
+
+
+-- 10) En la primera semana después de que un cliente se une al programa (incluida la fecha de ingreso), gana el doble de puntos en todos los artículos, no solo en sushi. ¿Cuántos puntos tienen los clientes A y B a fines de enero?
+-- Suposición: Solo los clientes que son miembros reciben puntos al comprar artículos, los puntos los reciben en las ordenes iguales o posteriores a la fecha en la que se convierten en miembros. Solo las ordenes de la primer semana en la que se convierten en miembros suman 20 puntos para todos los articulos.
+
+SELECT s.customer_id AS cliente, 
+       SUM(CASE 
+               WHEN s.order_date BETWEEN m.join_date AND DATEADD(DAY, 6, m.join_date) THEN mn.price * 10 * 2
+               WHEN mn.product_name = 'sushi' THEN mn.price * 10 * 2
+               ELSE mn.price * 10
+           END) AS total_puntos
+FROM sales AS s
+JOIN menu AS mn 
+ON s.product_id = mn.product_id
+JOIN members AS m 
+ON s.customer_id = m.customer_id
+WHERE s.order_date >= m.join_date
+AND s.order_date <= '2024-01-31'
+AND s.customer_id IN ('A', 'B')
+GROUP BY 1
+ORDER BY 1;
